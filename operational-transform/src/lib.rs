@@ -170,6 +170,12 @@ impl OperationSeq {
     /// Returns an `OTError` if the operations are not composable due to length
     /// conflicts.
     pub fn compose(&self, other: &Self) -> Result<Self, OTError> {
+        if self.is_noop() {
+            return Ok(other.clone());
+        } else if other.is_noop() {
+            return Ok(self.clone());
+        }
+
         if self.target_len != other.base_len {
             return Err(OTError);
         }
@@ -342,6 +348,12 @@ impl OperationSeq {
     /// Returns an `OTError` if the operations cannot be transformed due to
     /// length conflicts.
     pub fn transform(&self, other: &Self) -> Result<(Self, Self), OTError> {
+        if self.is_noop() {
+            return Ok((other.clone(), Self::default()));
+        } else if other.is_noop() {
+            return Ok((Self::default(), self.clone()));
+        }
+
         if self.base_len != other.base_len {
             return Err(OTError);
         }
@@ -460,6 +472,10 @@ impl OperationSeq {
     /// Returns an error if the operation cannot be applied due to length
     /// conflicts.
     pub fn apply(&self, s: &str) -> Result<String, OTError> {
+        if self.is_noop() {
+            return Ok(s.into());
+        }
+
         if num_chars(s.as_bytes()) != self.base_len {
             return Err(OTError);
         }
@@ -515,7 +531,7 @@ impl OperationSeq {
     /// Checks if this operation has no effect.
     #[inline]
     pub fn is_noop(&self) -> bool {
-        matches!(self.ops.as_slice(), [] | [Operation::Retain(_)])
+        self.ops.iter().all(|op| matches!(op, Operation::Retain(_)))
     }
 
     /// Returns the length of a string these operations can be applied to
