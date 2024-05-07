@@ -1,7 +1,7 @@
 use crate::{Operation, OperationSeq};
 use serde::{
     de::{self, Deserializer, SeqAccess, Visitor},
-    ser::{SerializeSeq, Serializer},
+    ser::{self, SerializeSeq, Serializer},
     Deserialize, Serialize,
 };
 use std::fmt;
@@ -12,8 +12,10 @@ impl Serialize for Operation {
         S: Serializer,
     {
         match self {
-            Operation::Retain(i) => serializer.serialize_u64(*i),
-            Operation::Delete(i) => serializer.serialize_i64(-(*i as i64)),
+            &Operation::Retain(i) => serializer.serialize_u64(i),
+            &Operation::Delete(i) => {
+                serializer.serialize_i64(-i64::try_from(i).map_err(ser::Error::custom)?)
+            }
             Operation::Insert(s) => serializer.serialize_str(s),
         }
     }
@@ -37,14 +39,19 @@ impl<'de> Deserialize<'de> for Operation {
             where
                 E: de::Error,
             {
-                Ok(Operation::Retain(value as u64))
+                Ok(Operation::Retain(value))
             }
 
             fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
             where
                 E: de::Error,
             {
-                Ok(Operation::Delete((-value) as u64))
+                // i64 to u64 is infallible when the value is positive.
+                Ok(if value < 0 {
+                    Operation::Delete((-value).try_into().unwrap())
+                } else {
+                    Operation::Retain(value.try_into().unwrap())
+                })
             }
 
             fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
